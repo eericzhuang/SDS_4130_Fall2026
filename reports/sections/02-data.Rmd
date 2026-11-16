@@ -1,0 +1,19 @@
+# Data
+
+```{r data-load}
+data_path <- here::here("data", "processed", "clean_data.rds")
+if (!file.exists(data_path)) {
+  stop("Missing ", data_path, ". Put sales_data.csv in data/raw/ and run scripts/01_clean_data.R")
+}
+dat <- readRDS(data_path)
+```
+
+TODO: describe the source. Each row is one product at one store on one day
+(`r format(nrow(dat), big.mark = ",")` rows, `r nlevels(dat$store_id)` stores,
+`r nlevels(dat$product_id)` products, `r min(dat$date)` to `r max(dat$date)`).
+
+```{r data-vars}
+tibble(Variable = names(dat), Type = map_chr(dat, ~ class(.x)[1])) |>
+  kable(booktabs = TRUE, caption = "Variables in the cleaned dataset") |>
+  kable_styling(latex_options = "HOLD_position")
+```

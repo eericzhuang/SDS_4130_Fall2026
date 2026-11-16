@@ -1,0 +1,24 @@
+# Exploratory Data Analysis
+
+```{r eda-summary}
+dat |>
+  select(where(is.numeric)) |>
+  pivot_longer(everything(), names_to = "Variable") |>
+  group_by(Variable) |>
+  summarise(Mean = mean(value), SD = sd(value), Min = min(value), Max = max(value)) |>
+  kable(booktabs = TRUE, digits = 2, caption = "Summary statistics") |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+```{r eda-demand, fig.cap = "Distribution of demand by category"}
+ggplot(dat, aes(demand, fill = category)) +
+  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
+  labs(x = "Demand", y = "Count", fill = "Category")
+```
+
+```{r eda-pairs, fig.cap = "Pairwise relationships (random sample of 2,000 rows)", fig.height = 5.5}
+dat |>
+  slice_sample(n = 2000) |>
+  select(demand, price, discount, competitor_pricing, inventory_level) |>
+  ggpairs(lower = list(continuous = wrap("points", alpha = 0.2, size = 0.5)))
+```

@@ -1,0 +1,18 @@
+# Regression Modeling
+
+Starting model (TODO: justify predictors; `units_sold` / `units_ordered` are left out
+because they are measured after demand is realized).
+
+```{r model-fit}
+fit <- lm(demand ~ price + discount + promotion + competitor_pricing + epidemic +
+            category + region + seasonality + weather_condition,
+          data = dat)
+reg_table(fit, caption = "OLS coefficient estimates")
+```
+
+```{r model-glance}
+glance(fit) |>
+  select(r.squared, adj.r.squared, sigma, statistic, p.value, AIC, BIC) |>
+  kable(booktabs = TRUE, digits = 3, caption = "Model fit statistics") |>
+  kable_styling(latex_options = "HOLD_position")
+```

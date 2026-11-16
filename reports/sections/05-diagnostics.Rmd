@@ -1,0 +1,25 @@
+# Model Diagnostics
+
+```{r diag-plots, fig.cap = "Residual diagnostics", fig.height = 6}
+par(mfrow = c(2, 2))
+plot(fit, pch = ".")
+```
+
+```{r diag-tests}
+resid_sample <- sample(residuals(fit), 5000)  # shapiro.test allows at most 5000 values
+tibble(
+  Check = c("Breusch-Pagan (constant variance)",
+            "Shapiro-Wilk on 5,000 residuals (normality)"),
+  p.value = c(bptest(fit)$p.value, shapiro.test(resid_sample)$p.value)
+) |>
+  kable(booktabs = TRUE, digits = 4, caption = "Assumption tests") |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+```{r diag-vif}
+vif(fit) |>
+  as.data.frame() |>
+  rownames_to_column("Predictor") |>
+  kable(booktabs = TRUE, digits = 2, caption = "Generalized variance inflation factors") |>
+  kable_styling(latex_options = "HOLD_position")
+```

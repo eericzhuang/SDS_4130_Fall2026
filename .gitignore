@@ -21,3 +21,9 @@ output/*
 # OS / editor
 .DS_Store
 .vscode/
+
+# Data stays off GitHub (share via course drive / Canvas)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
