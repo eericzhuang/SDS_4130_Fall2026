@@ -27,3 +27,8 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+
+# Knit output that RStudio saves next to the Rmd (use render.R -> output/)
+reports/*.pdf
+reports/*.html
+reports/*.tex
