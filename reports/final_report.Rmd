@@ -1,9 +1,9 @@
 ---
 title: "SDS 4130 Final Project: Modeling Retail Demand"
 author:
-  - "Member 1"
-  - "Member 2"
-  - "Member 3"
+  - "Eric Zhuang"
+  - "Lydia Zhang"
+  - "An Nguyen"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
   pdf_document:
@@ -14,6 +14,10 @@ fontsize: 11pt
 geometry: margin=1in
 header-includes:
   - \usepackage{float}
+  # wrap long code and output lines instead of running past the right margin
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,breakanywhere,commandchars=\\\{\}}
+  - \RecustomVerbatimEnvironment{verbatim}{Verbatim}{breaklines,breakanywhere}
 ---
 
 ```{r setup, include=FALSE}
@@ -22,6 +26,7 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
                       fig.align = "center", fig.width = 6.5, fig.height = 4,
                       out.width = "85%", fig.pos = "H",
                       dev = "png", dpi = 200)  # png keeps the PDF small with 76k points
+options(width = 75)  # printed R output fits the PDF text width
 library(tidyverse)
 library(broom)
 library(car)
@@ -55,7 +60,7 @@ set.seed(4130)
 
 # Appendix: Code {-}
 
-```{r appendix-code, ref.label = knitr::all_labels(), echo = TRUE, eval = FALSE}
+```{r appendix-code, ref.label = setdiff(knitr::all_labels(), c("appendix-code", "session-info")), echo = TRUE, eval = FALSE}
 ```
 
 # Appendix: Session Info {-}
