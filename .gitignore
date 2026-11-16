@@ -1,0 +1,23 @@
+# R / RStudio
+.Rhistory
+.RData
+.Rproj.user/
+.Renviron
+
+# R Markdown / knitr
+*_cache/
+*_files/
+*.knit.md
+*.utf8.md
+
+# Rendered output (regenerate with rmarkdown::render)
+output/*
+!output/.gitkeep
+
+# LaTeX intermediates
+*.aux
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
