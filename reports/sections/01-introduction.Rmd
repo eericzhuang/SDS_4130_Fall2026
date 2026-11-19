@@ -1,3 +1,0 @@
-# Introduction
-
-TODO: research question, motivation, and why `demand` is the response of interest.

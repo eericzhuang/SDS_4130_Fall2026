@@ -37,6 +37,6 @@ Or open `reports/final_report.Rmd` in RStudio and click **Knit** (run
 ## Group workflow
 
 - Edit only your own section file to avoid merge conflicts.
-- Chunk labels must be unique across all sections; prefix them with the section (e.g. `eda-`, `model-`).
+- Chunk labels must be unique across all sections; prefix them with the section (e.g. `ida-`, `diag-`).
 - After adding a package: `renv::snapshot()` and commit `renv.lock`.
 - `git pull` before you start, commit small, push often.

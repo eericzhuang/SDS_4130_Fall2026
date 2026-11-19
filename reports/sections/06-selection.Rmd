@@ -1,0 +1,7 @@
+## Model Selection
+
+TODO: backward and forward model selection.
+
+## Diagnostics for the Selected Model
+
+TODO: repeat the diagnostics (a)-(e) for the selected model.

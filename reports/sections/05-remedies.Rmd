@@ -1,0 +1,21 @@
+## Addressing Model Inadequacies
+
+### Multicollinearity
+
+```{r remedy-vif}
+vif(fit) |>
+  as.data.frame() |>
+  rownames_to_column("Predictor") |>
+  kable(booktabs = TRUE, digits = 2, caption = "Generalized variance inflation factors") |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+TODO
+
+### Response Transformation
+
+TODO
+
+### Weighted Least Squares
+
+TODO

@@ -38,22 +38,25 @@ theme_set(theme_minimal(base_size = 11))
 set.seed(4130)
 ```
 
-```{r child = here::here("reports", "sections", "01-introduction.Rmd")}
+```{r child = here::here("reports", "sections", "01-background.Rmd")}
 ```
 
-```{r child = here::here("reports", "sections", "02-data.Rmd")}
+```{r child = here::here("reports", "sections", "02-ida.Rmd")}
 ```
 
-```{r child = here::here("reports", "sections", "03-eda.Rmd")}
+```{r child = here::here("reports", "sections", "03-full-model.Rmd")}
 ```
 
-```{r child = here::here("reports", "sections", "04-modeling.Rmd")}
+```{r child = here::here("reports", "sections", "04-diagnostics.Rmd")}
 ```
 
-```{r child = here::here("reports", "sections", "05-diagnostics.Rmd")}
+```{r child = here::here("reports", "sections", "05-remedies.Rmd")}
 ```
 
-```{r child = here::here("reports", "sections", "06-conclusion.Rmd")}
+```{r child = here::here("reports", "sections", "06-selection.Rmd")}
+```
+
+```{r child = here::here("reports", "sections", "07-conclusion.Rmd")}
 ```
 
 \newpage

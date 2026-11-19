@@ -1,0 +1,19 @@
+## Initial Full Regression Model
+
+TODO: justify predictors.
+
+```{r full-fit}
+fit <- lm(demand ~ price + discount + promotion + competitor_pricing + epidemic +
+            category + region + seasonality + weather_condition,
+          data = dat)
+reg_table(fit, caption = "Initial full model: OLS coefficient estimates")
+```
+
+```{r full-glance}
+glance(fit) |>
+  select(r.squared, adj.r.squared, sigma, statistic, p.value, AIC, BIC) |>
+  kable(booktabs = TRUE, digits = 3, caption = "Initial full model: fit statistics") |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+TODO: interpret R^2, the F-test and key coefficients.

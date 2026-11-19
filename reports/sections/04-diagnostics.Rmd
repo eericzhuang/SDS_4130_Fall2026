@@ -1,6 +1,6 @@
-# Model Diagnostics
+## Model Diagnostics
 
-```{r diag-plots, fig.cap = "Residual diagnostics", fig.height = 6}
+```{r diag-plots, fig.cap = "Residual diagnostics for the initial full model", fig.height = 6}
 par(mfrow = c(2, 2))
 plot(fit, pch = ".")
 ```
@@ -16,10 +16,14 @@ tibble(
   kable_styling(latex_options = "HOLD_position")
 ```
 
-```{r diag-vif}
-vif(fit) |>
-  as.data.frame() |>
-  rownames_to_column("Predictor") |>
-  kable(booktabs = TRUE, digits = 2, caption = "Generalized variance inflation factors") |>
-  kable_styling(latex_options = "HOLD_position")
-```
+### High-Leverage Observations
+
+TODO
+
+### Outliers
+
+TODO
+
+### Influential Observations
+
+TODO
