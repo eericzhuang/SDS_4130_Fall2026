@@ -1,0 +1,72 @@
+# Appendix: R Output {-}
+
+This appendix shows the R output behind the tables and numbers quoted in the main text, in the order they appear. Objects such as `fit`, `BP` and `vif_gap` are created by the code in the code appendix.
+
+## Initial Data Analysis (Section 2.1) {-}
+
+```{r out-ida, echo = TRUE}
+c(duplicates = n_dup, missing = n_na, nonpositive = n_nonpos)
+cat_stats
+round(ida_cor, 3)
+```
+
+## Initial Full Model (Section 2.2) {-}
+
+```{r out-full, echo = TRUE}
+summary(fit)
+```
+
+## Model Diagnostics (Section 2.3) {-}
+
+Constant variance and normality:
+
+```{r out-diag-tests, echo = TRUE}
+sd_fitted     # residual SD by fifth of fitted values
+sd_category   # residual SD by category
+BP            # Breusch-Pagan
+BF            # Brown-Forsythe across categories
+SW            # Shapiro-Wilk on 5,000 sampled studentized residuals
+skew(fit$residuals)
+```
+
+High leverage, outliers and influence:
+
+```{r out-diag-unusual, echo = TRUE}
+round(c(leverage_cutoff = 2 * p / n, max_leverage = max(h)), 6)
+sum(lev)      # number of high-leverage observations
+summary(dat[lev, c("price", "competitor_pricing", "category")])
+c(bonferroni_cutoff = cut_t, max_abs_rstudent = max(abs(t)))
+sum(out)      # number of outliers
+dat[out, c("demand", "promotion", "category")]
+max(D)        # largest Cook's distance
+```
+
+## Addressing Model Inadequacies (Section 2.4) {-}
+
+Multicollinearity:
+
+```{r out-vif, echo = TRUE}
+vif(fit)
+vif(fit_gap)
+cor(dat$price, dat$price_gap)
+coef(summary(fit_gap))[c("price", "price_gap"), ]
+```
+
+Box-Cox transformation and the square-root model:
+
+```{r out-boxcox, echo = TRUE}
+c(lambda_hat = lambda_hat, CI_lower = CI[1], CI_upper = CI[2],
+  loglik_drop_at_0.5 = max(loglik) - loglik[lambda == 0.5])
+summary(fit_sqrt)
+bptest(fit_sqrt)
+```
+
+Weighted least squares:
+
+```{r out-wls, echo = TRUE}
+niter         # IRLS iterations until convergence
+F_ols         # Brown-Forsythe F across category x promotion, square-root OLS
+F_wls         # Brown-Forsythe across category x promotion, WLS standardized residuals
+summary(fit_wls)
+round(cbind(OLS = b_ols[, 1], WLS = b_wls[, 1], SE_ratio = se_ratio), 3)
+```

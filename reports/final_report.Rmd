@@ -61,9 +61,14 @@ set.seed(4130)
 
 \newpage
 
+```{r child = here::here("reports", "sections", "08-output.Rmd")}
+```
+
+\newpage
+
 # Appendix: Code {-}
 
-```{r appendix-code, ref.label = setdiff(knitr::all_labels(), c("appendix-code", "session-info")), echo = TRUE, eval = FALSE}
+```{r appendix-code, ref.label = setdiff(grep("^out-", knitr::all_labels(), value = TRUE, invert = TRUE), c("appendix-code", "session-info")), echo = TRUE, eval = FALSE}
 ```
 
 # Appendix: Session Info {-}
