@@ -1,10 +1,8 @@
 # Background and Objectives
 
-TODO
-
 Effective inventory management is essential for retail businesses to meet customer demand while minimizing excess inventory and storage costs. Underestimating demand can result in stock shortages and lost sales; overestimating demand can lead to unnecessary inventory expenses. Understanding the factors associated with retail product demand can help businesses make more informed inventory planning and pricing decisions. 
 
-In this study, we use the Retail Store Inventory and Demand Forecasting dataset obtained from Kaggle to investigate the relationship between daily product demand and various variables across multiple retail stores and products. The response variable we are interested in is daily product demand. Our potential predictors include inventory levels, prices, discounts, competitor pricing, promotions, epidemic indicators, weather conditions, seasonality, product categories, and store characteristics 
+In this study, we use the Retail Store Inventory and Demand Forecasting dataset obtained from Kaggle to investigate the relationship between daily product demand and various variables across multiple retail stores and products. The response variable we are interested in is daily product demand. Our potential predictors include prices, discounts, competitor pricing, promotions, epidemic indicators, weather conditions, seasonality, regions, and product categories.
 
 We will begin by exploring the dataset to better understand the characteristics of individual variables and the relationships among them. We will then develop a multiple linear regression model to investigate the factors associated with retail product demand. Through statistical inference and model diagnostics, we will evaluate the performance of the model, assess the validity of its underlying assumptions, and identify potential areas for improvement. We will also consider the characteristics of demand data, particularly its non-negative nature and the potential presence of zero-demand observations, when evaluating the suitability of our modeling approach. Based on our findings, we will explore appropriate remedies and model selection techniques to develop a suitable final regression model.
 

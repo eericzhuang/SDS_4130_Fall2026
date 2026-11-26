@@ -1,29 +1,61 @@
 ## Model Diagnostics
 
-```{r diag-plots, fig.cap = "Residual diagnostics for the initial full model", fig.height = 6}
-par(mfrow = c(2, 2))
-plot(fit, pch = ".")
+We assess the assumptions of the initial full model through its residuals: the studentized residuals $r_i = e_i / (\hat\sigma\sqrt{1 - h_{ii}})$ for constant variance and normality, and the R-student residuals $t_i$, leverages $h_{ii}$ and Cook's distances $D_i$ for unusual observations. With $n = 76{,}000$, formal tests detect even negligible departures, so we treat the plots as the primary evidence and the tests as supporting evidence.
+
+```{r diag-setup}
+n = nrow(dat)
+p = length(fit$coefficients)   # number of regression coefficients
+alpha = 0.05
+f = function(x, d = 2) formatC(x, format = "f", digits = d, big.mark = ",")
+skew = function(e) mean(((e - mean(e)) / sd(e))^3)
 ```
 
+```{r diag-plots, fig.cap = "Diagnostic plots for the initial full model; the dashed vertical line in the bottom-right panel marks the leverage cutoff $2p/n$", fig.width = 7, fig.height = 5.4, out.width = "88%"}
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+plot(fit, which = c(1, 2, 3, 5), pch = 16, cex = 0.3, col = rgb(0, 0, 0, 0.2))
+abline(v = 2 * p / n, lty = 2, lwd = 2)
+```
+
+### Constant Variance and Normality
+
 ```{r diag-tests}
-resid_sample <- sample(residuals(fit), 5000)  # shapiro.test allows at most 5000 values
-tibble(
-  Check = c("Breusch-Pagan (constant variance)",
-            "Shapiro-Wilk on 5,000 residuals (normality)"),
-  p.value = c(bptest(fit)$p.value, shapiro.test(resid_sample)$p.value)
-) |>
-  kable(booktabs = TRUE, digits = 4, caption = "Assumption tests") |>
+quintile = cut(fit$fitted.values, quantile(fit$fitted.values, 0:5 / 5), include.lowest = TRUE)
+sd_fitted = tapply(fit$residuals, quintile, sd)          # residual SD by fifth of fitted values
+sd_category = tapply(fit$residuals, dat$category, sd)
+
+BP = bptest(fit)
+residuals = fit$residuals
+Rmed = ave(residuals, dat$category, FUN = median)
+aux = lm(abs(residuals - Rmed) ~ category, dat)       # Brown-Forsythe test across categories
+BF = anova(aux)
+set.seed(4130)
+SW = shapiro.test(sample(rstandard(fit), 5000))       # shapiro.test allows at most 5000 values
+
+data.frame(Test = c("Breusch-Pagan", "Brown-Forsythe (by category)", "Shapiro-Wilk (5,000 residuals)"),
+           Statistic = c(BP$statistic, BF$`F value`[1], SW$statistic),
+           df = c(BP$parameter, paste(BF$Df, collapse = ", "), "--"),
+           p.value = format.pval(c(BP$p.value, BF$`Pr(>F)`[1], SW$p.value), eps = 0.001)) |>
+  kable(booktabs = TRUE, digits = 3, row.names = FALSE,
+        caption = "Tests of constant variance and normality for the initial full model") |>
   kable_styling(latex_options = "HOLD_position")
 ```
 
-### High-Leverage Observations
+- **Constant variance (3a).** The residuals vs. fitted and scale-location plots show a clear funnel instead of a horizontal band. The residual standard deviation grows from `r f(sd_fitted[1])` in the lowest fifth of fitted values to `r f(sd_fitted[5])` in the highest, as is typical of count data whose variance increases with the mean. It also differs across categories, from `r f(sd_category["Furniture"])` for Furniture to `r f(sd_category["Clothing"])` for Clothing. The Breusch-Pagan and Brown-Forsythe tests both reject constant variance.
+- **Normality (3b).** The normal Q-Q plot of the studentized residuals follows the reference line in the center, but the upper tail bends above it, so the errors are right-skewed (residual skewness `r f(skew(fit$residuals))`), in line with the right-skewed demand distribution. The Shapiro-Wilk test rejects normality, although $W = `r f(SW$statistic, 3)`$ is close to 1, so the departure is moderate. With this many observations, the coefficient estimates remain approximately normal, so the non-constant variance, which makes the OLS standard errors unreliable, is the more serious problem.
 
-TODO
+### High-Leverage Observations, Outliers and Influential Observations
 
-### Outliers
+```{r diag-unusual}
+h = hatvalues(fit)
+t = rstudent(fit)
+D = cooks.distance(fit)
+lev = h > 2 * p / n
+cut_t = qt(alpha / (2 * n), n - p - 1, lower.tail = FALSE)   # Bonferroni critical value
+out = abs(t) > cut_t
+```
 
-TODO
+- **High leverage (3c).** Using the rule $h_{ii} > 2p/n = `r f(2 * p / n, 5)`$, `r sum(lev)` observations have high leverage. They combine high prices (all above `r floor(min(dat$price[lev]))`) with large gaps between the product's price and the competitor's price, and `r sum(dat$category[lev] == "Furniture")` of them are Furniture. Even the largest leverage, `r f(max(h), 5)`, is tiny, so no single observation can pull the fitted surface.
+- **Outliers (3d).** Since we ask whether any of the $n$ responses is outlying, we compare the R-student residuals with the Bonferroni critical value $t_{\alpha/(2n),\,n-p-1} = `r f(cut_t)`$. The largest $|t_i|$ is `r f(max(abs(t)))`, and `r sum(out)` observations exceed the cutoff. All have positive residuals and demand between `r min(dat$demand[out])` and `r max(dat$demand[out])` units, and `r sum(dat$promotion[out])` of them occurred during a promotion. These are plausible high-demand days rather than recording errors, so we keep them.
+- **Influential observations (3e).** The largest Cook's distance is `r f(max(D), 5)`, far below the rule-of-thumb values of 0.5 and 1, and all points lie well inside the $D = 0.5$ contour of the residuals vs. leverage plot, so no observation is influential.
 
-### Influential Observations
-
-TODO
+In summary, the main inadequacies of the initial model are an error variance that increases with the mean and differs across product categories, and moderate right skewness. Leverage, outliers and influence are not a concern. The next section addresses the inadequacies with a response transformation and weighted least squares.

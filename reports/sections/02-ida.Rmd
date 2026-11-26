@@ -10,118 +10,54 @@ if (!file.exists(data_path)) {
 dat <- readRDS(data_path)
 ```
 
-Before fitting the initial multiple linear regression model, we conduct exploratory data analysis to better understand the dataset's strucutre. Each observation represents a particular product at a particular retail store on a given day. 
-
-Each observation represents a particular product at a particular retail store on a given day. 
-(`r format(nrow(dat), big.mark = ",")` rows, `r nlevels(dat$store_id)` stores,
-`r nlevels(dat$product_id)` products, `r min(dat$date)` to `r max(dat$date)`).  
-
-```{r dataset sums}
-nrow(dat)
-nlevels(dat$store_id)
-nlevels(dat$product_id)
-range(dat$date)
-```
-```{r combo counts}
-dat |>
+```{r ida-checks}
+n_dup <- dat |>
   count(date, store_id, product_id) |>
-  filter(n != 1)
+  filter(n != 1) |>
+  nrow()
+n_na <- sum(is.na(dat$demand))
+n_nonpos <- sum(dat$demand <= 0)
 ```
 
-The cleaned dataset contains 76,000 observations across 5 retail stores and 20 distinct products that cover the time from January 1st 2022 to January 20th 2024. The data also confirms that each store-product-day combination appears exactly once. The dataset consists of both quantitative and categorical variables with daily product demand serving as our response variable of interest.
+Before fitting the initial multiple linear regression model, we explore the structure of the dataset. Each observation represents a particular product at a particular retail store on a given day. The cleaned dataset contains `r format(nrow(dat), big.mark = ",")` observations across `r nlevels(dat$store_id)` retail stores and `r nlevels(dat$product_id)` distinct products, covering `r gsub(" 0", " ", format(min(dat$date), "%B %d, %Y"))` to `r gsub(" 0", " ", format(max(dat$date), "%B %d, %Y"))`, and each store-product-day combination appears exactly once (`r n_dup` duplicates).
 
-```{r ida-vars}
-tibble(Variable = names(dat), Type = map_chr(dat, ~ class(.x)[1])) |>
-  kable(booktabs = TRUE, caption = "Variables in the cleaned dataset") |>
-  kable_styling(latex_options = "HOLD_position")
-```
-
-```{r ida-binary vars}
-table(dat$promotion)
-table(dat$epidemic)
-```
-
-The cleaned dataset contains 16 variables: nine numeric variables, six categorial variables, and one data variable. The response variable, demand, is quantitative and represents daily product demand. Although promotion and epidemic are stored as numeric variables, both are binary indicators taking values of either 0 or 1. Potential predictors include quantitative variables related to inventory levels, sales, orders, and pricing, as well as categorical variables representing product categories, geographical regions, weather conditions, and seasonality. The dataset also includes store and product identifiers, which allow us to distinguish observations across different stores and products.
+The dataset contains 16 variables: nine numeric variables, six categorical variables (store, product, category, region, weather condition and seasonality), and one date variable. Although promotion and epidemic are stored as numeric variables, both are binary indicators taking values 0 or 1; `r round(100 * mean(dat$promotion))`% of the observations are promoted and `r round(100 * mean(dat$epidemic))`% occur during an epidemic.
 
 ```{r ida-summary}
-set.seed(4130)
 dat |>
   select(where(is.numeric)) |>
   pivot_longer(everything(), names_to = "Variable") |>
   group_by(Variable) |>
   summarise(Mean = mean(value), SD = sd(value), Min = min(value), Max = max(value)) |>
-  kable(booktabs = TRUE, digits = 2, caption = "Summary statistics") |>
+  kable(booktabs = TRUE, digits = 2, caption = "Summary statistics of the numeric variables") |>
   kable_styling(latex_options = "HOLD_position")
 ```
 
-```{r ida-nulls}
-sum(is.na(dat$demand))
-sum(dat$demand == 0, na.rm = TRUE)
-sum(dat$demand < 0, na.rm = TRUE)
-```
+Daily product demand has a mean of `r round(mean(dat$demand), 2)` units and a standard deviation of `r round(sd(dat$demand), 2)` units, with observed values ranging from `r min(dat$demand)` to `r max(dat$demand)` units. There are `r n_na` missing and `r n_nonpos` zero or negative demand values, so zero-demand observations are not a concern in this dataset. Inventory level and units ordered exhibit substantial variability, and the standard deviation of units ordered exceeds its mean. Product prices and competitor prices have similar means and standard deviations, and discounts range from 0 to 25 with an average of `r round(mean(dat$discount), 2)`.
 
-The summary statistics offer us an overview of the central variability, range, and behavior of the numeric variables. Daily product demand has a mean of 104.32 units and a standard deviation of 46.96 units --- observed values ranging from 4 to 430 units. Interestingly, all observed demand values are strictly positive, indicating that zero-demand observations are not a concern in the cleaned dataset. We furhter verify the absence of missing, zero, and negative demand values in the cleaned dataset.
+```{r ida-boxplots, fig.cap = "Boxplots of demand by product category"}
+cat_stats <- dat |>
+  group_by(category) |>
+  summarise(n = n(), Mean = mean(demand), Median = median(demand), SD = sd(demand))
 
-Inventory level and units ordered exhibit substantial variability, with standard deviations of 226.51 and 162.40 units, respectively. The standard deviation of units ordered exceeds its mean, suggesting considerable variation in ordering quantities. Product prices and competitor prices share similar means and standard deviations which can mean their overall distributions may have similar characteristics. Discounts range from 0 to 25, with an average of 9.09. 
-
-The summary statistics indicate substantial variability across several numeric variables. Further analysis is conducted to better understand their distributions, identify potential irregularities, as well as explore their relationships with product demand. 
-
-```{r ida-demand, fig.cap = "Distribution of demand by category"}
-ggplot(dat, aes(demand, fill = category)) +
-  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
-  labs(x = "Demand", y = "Count", fill = "Category")
-```
-
-```{r ida- boxplots, fig.cap= "Boxplots of demand by category"}
 ggplot(dat, aes(x = category, y = demand, fill = category)) +
-  geom_boxplot() +
+  geom_boxplot(outlier.size = 0.3) +
   labs(x = "Product Category", y = "Demand") +
   theme(legend.position = "none")
 ```
 
-```{r ida-sum stats, fig.cap= "Summary statistics of demand by product category"}
-dat |>
-  group_by(category) |>
-  summarise(
-    n = n(),
-    Mean = mean(demand),
-    Median = median(demand),
-    SD = sd(demand),
-    Min = min(demand),
-    Max = max(demand)
-  ) |>
-  kable(
-    booktabs = TRUE,
-    digits = 2,
-    caption = "Summary statistics of demand by product category"
-  ) |>
-  kable_styling(latex_options = "HOLD_position")
-```
+The demand distributions are right-skewed in all five categories, with most observations below 200 units and long upper tails containing many high outlying values. Groceries has the highest mean and median demand (`r round(cat_stats$Mean[cat_stats$category == "Groceries"], 2)` and `r cat_stats$Median[cat_stats$category == "Groceries"]` units) and the highest variability (SD `r round(cat_stats$SD[cat_stats$category == "Groceries"], 2)`), followed by Clothing (mean `r round(cat_stats$Mean[cat_stats$category == "Clothing"], 2)`). Furniture has the lowest mean and median (`r round(cat_stats$Mean[cat_stats$category == "Furniture"], 2)` and `r cat_stats$Median[cat_stats$category == "Furniture"]`) and the least variability (SD `r round(cat_stats$SD[cat_stats$category == "Furniture"], 2)`). The categories are also unbalanced, with `r format(max(cat_stats$n), big.mark = ",")` observations for Groceries but only `r format(min(cat_stats$n), big.mark = ",")` for Electronics. These differences in both center and spread suggest that product category is an important predictor and motivate checking whether the error variance differs across categories.
 
-The histogram illustrated the distribution of daily product demand across the five categories: Clothing, Electronics, Furniture, Groceries, and Toys. The distributions seem to generally exhibit right-skewed behavior, with most demand observations concentrated below 200 unis and fewer observations at higher demand levels. This pattern is further supported by the boxplots which show longer upper tails and numerous high outlier demand observations across all five categories.
-
-Groceries appears to have a distribution centered at higher demand values and a longer right tail. Groceries also has the highest mean and median demand at 120.98 and 116 units, respectively, which is followed by Clothing with a mean of 112.62 units. In contrast, Furniture appears to be concentrated at lower demand values with the lowest mean and median demand at 73.58 and 72 units, respectively. Groceries has the highest variability in demand with a standard deviation of 48.36 units, whereas Furniture exhibits the least variability, with a standard deviation of 32.34 units. 
-
-There is also considerable variation in the number of observations across product categories with Groceries (highest number of observations) having around 21,280 more observations than Electronics (lowest number of observations). Despite considerable overlap in the demand distributions, the observed differences in each categories' tendency and variability suggest that product category may be an important predictor of retail product demand. These findings motivate further investigation into whether the relationships between demand and other predictors differ across product categories.
-
-```{r ida-pairs, fig.cap = "Pairwise relationships (random sample of 2,000 rows)", fig.height = 5.5}
+```{r ida-pairs, fig.cap = "Pairwise relationships (random sample of 2,000 rows)", fig.height = 4.5}
 set.seed(4130)
-
-library(GGally)
-dat |>
+ida_sample <- dat |>
   slice_sample(n = 2000) |>
-  select(demand, price, discount, competitor_pricing, inventory_level) |>
-  ggpairs(lower = list(continuous = wrap("points", alpha = 0.2, size = 0.5)))
+  select(demand, price, discount, competitor_pricing, inventory_level)
+ida_cor <- cor(ida_sample)
+
+ggpairs(ida_sample, lower = list(continuous = wrap("points", alpha = 0.2, size = 0.5)))
 ```
 
-To further explore the relationships between demand and selected quantitative predictors, a scatterplot matrix is constructed using a random sample of 2,000 observations. The matrix displays pairwise scatter plots, and Pearson correlation coefficients. 
+To explore the relationships between demand and the quantitative predictors, we construct a scatterplot matrix from a random sample of 2,000 observations. Demand has weak positive correlations with discount (`r round(ida_cor["demand", "discount"], 3)`) and inventory level (`r round(ida_cor["demand", "inventory_level"], 3)`) and weak negative correlations with price (`r round(ida_cor["demand", "price"], 3)`) and competitor pricing (`r round(ida_cor["demand", "competitor_pricing"], 3)`). Price and competitor pricing have a very strong positive correlation of `r round(ida_cor["price", "competitor_pricing"], 3)`, which indicates potential multicollinearity, while the remaining pairwise correlations are weak. Demand, price, competitor pricing and inventory level are right-skewed to varying degrees, and discount takes only a few discrete values.
 
-Demand exhibits weak positive correlations with discount (0.195) and inventory level (0.121) which suggests that higher discounts and inventory tend to be associated with higher demand. In contrast, demand has weak negative correlations with price (-0.044) and competitor pricing (-0.045).
-
-Among the predictors, price and competitor pricing have very strong position correlation of 0.978, which may indicate potential multicollinearity in the regression model. The remaining pairwise correlations among the selected predictors are relatively weak. These preliminary findings motivate further investigation of multicollinearity during the subsequent regression analysis. 
-
-Additionally the distributions indicate that demand, price, competitor pricing, and inventory right-skewed to varying degrees. Discount seems to take several discrete values, as reflected by the distinct clusters in the corresponding scatterplots. 
-
-
-
-Overall, the initial data analysis reveals differences in demand distributions across product categories, varying degrees of association between demand and its potential predictors, and potential multicollinearity between price and competitor pricing. Furthermore, all observed demand values are positive which eliminates concerns regarding zero-demand observations in the cleaned dataset. These findings provide a foundation for us to construct the initial full multiple lienar regression model and motivates further investigation through statistical inference and model diagnostics. 
+Overall, the initial data analysis reveals differences in demand across product categories, weak marginal associations between demand and the quantitative predictors, and potential multicollinearity between price and competitor pricing. All demand values are positive, which eliminates concerns regarding zero-demand observations.

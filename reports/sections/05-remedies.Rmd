@@ -3,19 +3,139 @@
 ### Multicollinearity
 
 ```{r remedy-vif}
-vif(fit) |>
-  as.data.frame() |>
-  rownames_to_column("Predictor") |>
-  kable(booktabs = TRUE, digits = 2, caption = "Generalized variance inflation factors") |>
-  kable_styling(latex_options = "HOLD_position")
+dat$price_gap = dat$price - dat$competitor_pricing
+fit_gap = lm(demand ~ price + price_gap + discount + promotion + epidemic +
+               category + region + seasonality + weather_condition, dat)
+
+vif_full = vif(fit)
+vif_gap = vif(fit_gap)
+others = rownames(vif_gap)[-(1:2)]
 ```
 
-TODO
+In the initial model, price and competitor pricing have generalized variance inflation factors (GVIFs) of `r f(vif_full["price", "GVIF"])` and `r f(vif_full["competitor_pricing", "GVIF"])`, which inflates their standard errors by a factor of about `r f(sqrt(vif_full["price", "GVIF"]), 1)` and makes their separate effects hard to identify; all other GVIFs are below `r ceiling(max(vif_full[others, "GVIF"]))`. Rather than dropping one of them, we replace competitor pricing with the price gap, $\text{price\_gap} = \text{price} - \text{competitor\_pricing}$, which is nearly uncorrelated with price ($r = `r f(cor(dat$price, dat$price_gap))`$). Because the new predictors are a linear recombination of the old ones, the fitted values and $R^2$ are unchanged, but the GVIFs drop to `r f(vif_gap["price", "GVIF"])` for price and `r f(vif_gap["price_gap", "GVIF"])` for the price gap, so every GVIF is now below 3.
+
+The reparameterized coefficients are also easier to interpret:
+
+- **price_gap**: Holding the price level fixed, each additional unit by which a product is priced above its competitor is associated with a change in mean demand of `r f(coef(fit_gap)["price_gap"], 3)` units. The negative sign is consistent with consumers substituting toward cheaper competitors.
+- **price**: The coefficient (`r f(coef(fit_gap)["price"], 3)`) now describes a shift in the overall price level of the product and its competitor together. Its positive sign likely reflects differences between products in different price tiers rather than a causal price effect.
 
 ### Response Transformation
 
-TODO
+```{r remedy-boxcox}
+Y = dat$demand
+X = model.matrix(fit_gap)
+lambda = seq(0, 1, 0.01)
+loglik = numeric(length(lambda))
+for (i in 1:length(lambda))
+{
+  if (lambda[i] == 0)
+  {
+    Ypower = log(Y)
+  } else
+  {
+    Ypower = (Y^lambda[i] - 1) / lambda[i]
+  }
+  power = lm(Ypower ~ X - 1)
+  loglik[i] = logLik(power)[1] + (lambda[i] - 1) * sum(log(Y))
+}
+lambda_hat = lambda[which.max(loglik)]
+CI = range(lambda[loglik > max(loglik) - qchisq(1 - alpha, 1) / 2])
+
+fit_sqrt = lm(sqrt(demand) ~ price + price_gap + discount + promotion + epidemic +
+                category + region + seasonality + weather_condition, dat)
+```
+
+```{r remedy-boxcox-plot, fig.cap = "Box-Cox profile log-likelihood with the 95\\% cutoff (left), and standardized residuals against fitted values (middle) and normal Q-Q plot (right) for the square-root model", fig.width = 7.5, fig.height = 2.6, out.width = "100%"}
+par(mfrow = c(1, 3), mar = c(4, 4, 1, 1))
+plot(lambda, loglik, "l", xlab = expression(lambda), ylab = "Profile Log-Likelihood", lwd = 2)
+abline(h = max(loglik) - qchisq(1 - alpha, 1) / 2, lty = 2, lwd = 2)
+abline(v = 0.5, lty = 3, lwd = 2)
+plot(fit_sqrt$fitted.values, rstandard(fit_sqrt), xlab = "Fitted Values",
+     ylab = "Standardized Residuals", pch = 16, cex = 0.3, col = rgb(0, 0, 0, 0.2))
+abline(h = 0, lty = 2, lwd = 2)
+qqnorm(rstandard(fit_sqrt), main = "", pch = 16, cex = 0.3)
+qqline(rstandard(fit_sqrt), lty = 2, lwd = 2)
+```
+
+```{r remedy-compare}
+diagnose = function(model, group)
+{
+  e = model$residuals
+  q = cut(model$fitted.values, quantile(model$fitted.values, 0:5 / 5), include.lowest = TRUE)
+  sd_q = tapply(e, q, sd)
+  emed = ave(e, group, FUN = median)
+  set.seed(4130)
+  c(sd_q[5] / sd_q[1],
+    bptest(model)$statistic,
+    anova(lm(abs(e - emed) ~ group))$`F value`[1],
+    shapiro.test(sample(rstandard(model), 5000))$statistic,
+    skew(e))
+}
+data.frame(Diagnostic = c("Residual SD ratio (top / bottom fifth of fitted values)",
+                          "Breusch-Pagan statistic", "Brown-Forsythe F (by category)",
+                          "Shapiro-Wilk W (5,000 residuals)", "Residual skewness"),
+           Initial = diagnose(fit_gap, dat$category),
+           SquareRoot = diagnose(fit_sqrt, dat$category)) |>
+  kable(booktabs = TRUE, digits = 3, row.names = FALSE, col.names = c("Diagnostic", "Initial", "Square root"),
+        caption = "Diagnostics before and after the square-root transformation") |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+All demand values are at least `r min(Y)`, so the Box-Cox transformation uses every observation and no data are excluded. The profile log-likelihood is maximized at $\hat\lambda = `r lambda_hat`$ with 95% confidence interval $[`r CI[1]`, `r CI[2]`]$. The interval is extremely narrow because of the sample size, so it excludes the convenient value $\lambda = 0.5$, even though the log-likelihood at 0.5 is only `r f(max(loglik) - loglik[lambda == 0.5], 1)` lower, a relative difference of `r f(100 * (max(loglik) - loglik[lambda == 0.5]) / abs(max(loglik)), 3)`%. We therefore use the square-root transformation, which is easy to interpret and is the standard variance-stabilizing transformation for count data whose variance grows with the mean.
+
+The transformation addresses the two problems found in the diagnostics:
+
+- **Constant variance.** The funnel shape is largely removed. The ratio of residual standard deviations between the highest and lowest fifths of fitted values drops from `r f(diagnose(fit_gap, dat$category)[1])` to `r f(diagnose(fit_sqrt, dat$category)[1])`, and the Breusch-Pagan statistic falls by about half. The Brown-Forsythe test still shows clear differences in variance across categories, which we address next.
+- **Normality.** The upper tail now follows the reference line, but the lower tail bends below it, so the residual skewness changes sign from `r f(skew(fit_gap$residuals))` to `r f(skew(fit_sqrt$residuals))` with a similar magnitude. The Shapiro-Wilk $W$ moves slightly closer to 1, so normality improves only marginally. Given the sample size, this mild skewness has little effect on inference.
+
+The coefficients are now on the square-root scale; we return to the original scale when interpreting the final model.
 
 ### Weighted Least Squares
 
-TODO
+The remaining heteroscedasticity is linked to product category and promotion, consistent with the observation that demand behaves differently across categories. We therefore model the error variance as a function of these two factors, $\log \sigma_i^2 = \gamma_0 + \text{category}_i \times \text{promotion}_i$, and estimate the weights $w_i = 1/\hat\sigma_i^2$ by iteratively reweighted least squares.
+
+```{r remedy-wls}
+w = rep(1, n)
+err = Inf
+tol = 1e-10
+niter = 0
+maxiter = 1000
+residuals = fit_sqrt$residuals
+while (err > tol & niter < maxiter)
+{
+  aux = lm(log(residuals^2) ~ category * promotion, dat)
+  err = sum(abs(w - exp(-aux$fitted.values))) / sum(w)
+  w = exp(-aux$fitted.values)
+  fit_wls = lm(sqrt(demand) ~ price + price_gap + discount + promotion + epidemic +
+                 category + region + seasonality + weather_condition, dat, weights = w)
+  residuals = fit_wls$residuals
+  niter = niter + 1
+}
+
+group = interaction(dat$category, dat$promotion)
+sd_ols = tapply(fit_sqrt$residuals, list(dat$category, dat$promotion), sd)
+sd_wls = tapply(rstandard(fit_wls), list(dat$category, dat$promotion), sd)
+F_ols = diagnose(fit_sqrt, group)[3]
+F_wls = anova(lm(abs(rstandard(fit_wls) - ave(rstandard(fit_wls), group, FUN = median)) ~ group))
+
+data.frame(Category = rownames(sd_ols), sd_ols, sd_wls) |>
+  kable(booktabs = TRUE, digits = 3, row.names = FALSE,
+        col.names = c("Category", "No promotion", "Promotion", "No promotion", "Promotion"),
+        caption = "Residual standard deviation by category and promotion: unweighted residuals of the square-root OLS model and standardized residuals of the WLS model") |>
+  add_header_above(c(" " = 1, "OLS residuals" = 2, "WLS standardized residuals" = 2)) |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+```{r remedy-wls-coef}
+b_ols = coef(summary(fit_sqrt))
+b_wls = coef(summary(fit_wls))
+se_ratio = b_wls[, 2] / b_ols[, 2]   # WLS standard error relative to OLS
+same_sign = all(sign(b_wls[, 1]) == sign(b_ols[, 1]))
+```
+
+The algorithm converged after `r niter` iterations.
+
+- **Variance.** Before weighting, the residual standard deviation ranges from `r f(min(sd_ols), 2)` (`r rownames(sd_ols)[which(sd_ols == min(sd_ols), arr.ind = TRUE)[1]]`, no promotion) to `r f(max(sd_ols), 2)` (`r rownames(sd_ols)[which(sd_ols == max(sd_ols), arr.ind = TRUE)[1]]`, promotion), a `r f(max(sd_ols)^2 / min(sd_ols)^2, 1)`-fold difference in variance. Promoted products are consistently more variable. After weighting, the standardized residual standard deviations lie between `r f(min(sd_wls), 2)` and `r f(max(sd_wls), 2)`, and the Brown-Forsythe statistic across the ten groups drops from `r f(F_ols, 1)` to `r f(F_wls$"F value"[1], 2)` (p-value `r f(F_wls$"Pr(>F)"[1], 3)`). The weights therefore remove the remaining heteroscedasticity.
+- **Coefficients.** The WLS estimates are close to the OLS estimates and `r ifelse(same_sign, "all have the same signs", "some change sign")`; for example, the promotion effect changes from `r f(b_ols["promotion", 1], 3)` to `r f(b_wls["promotion", 1], 3)` and the epidemic effect from `r f(b_ols["epidemic", 1], 3)` to `r f(b_wls["epidemic", 1], 3)`. `r sum(se_ratio < 1)` of the `r length(se_ratio)` WLS standard errors are smaller than the OLS ones, by up to `r f(100 * (1 - min(se_ratio)), 0)`%, reflecting the efficiency gained by down-weighting the noisier groups. The $R^2$ of the WLS fit is computed on the weighted scale and is not directly comparable with that of the OLS fit.
+
+The corrected model is therefore the WLS fit of $\sqrt{\text{demand}}$ on price, price gap, discount, promotion, epidemic, category, region, seasonality and weather condition, with weights depending on category and promotion (`fit_wls`). It serves as the starting point for model selection in the next section.

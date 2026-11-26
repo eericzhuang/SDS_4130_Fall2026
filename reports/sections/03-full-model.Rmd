@@ -1,60 +1,27 @@
 ## Initial Full Regression Model
 
-Following the initial data analysis, we construct a multiple linear regression model using daily product demand as the response variable. The initial full model includes nine predictors selected based on their practical relevance to retail product demand.
+Following the initial data analysis, we construct a multiple linear regression model using daily product demand as the response variable. The initial full model includes nine predictors selected based on their practical relevance to retail product demand. Price, discount, promotion, and competitor pricing account for pricing strategies and market competition. Epidemic and weather conditions capture external factors that may influence consumer purchasing behavior. Region and seasonality account for geographical and seasonal differences, and product category accounts for the differences across product types observed in the initial data analysis. Units sold and units ordered are excluded because they are recorded after, or in response to, the demand realized on that day, so including them would leak information about the response into the predictors. Inventory level is excluded because it reflects the store's replenishment decisions, which are themselves driven by expected demand.
 
-Price, discount, promotion, and competitor pricing are included to account for any pricing strategies, and market competition. Epidemic and weather conditions are included to capture external factors that may influence consumer purchasing behavior. Region and seasonality are included to account for geographical and seasonal differences in demand. Product category is included to account for differences in demand across different types of products, which was observed in the initial data analysis.
-
-Even though the initial data analysis reveals a strong positive correlation between price and competitive pricing, both variables are retained in the initial model because of their practical relevance. Potential multicollinearity and other model inadequacies will be investigated in subsequent sections.
-
-The initial full regression is estimated using ordinary least squares (OLS) and serves as a baseline for subsequent model diagnostics, and model selection. 
+Even though price and competitor pricing are strongly correlated, both are retained in the initial model because of their practical relevance; potential multicollinearity is investigated in subsequent sections. The model is estimated by ordinary least squares (OLS) and serves as a baseline for model diagnostics and model selection.
 
 ```{r full-fit}
-library(broom)
-library(knitr)
-
 fit <- lm(demand ~ price + discount + promotion + competitor_pricing + epidemic +
             category + region + seasonality + weather_condition,
           data = dat)
+fit_summary <- summary(fit)
 reg_table(fit, caption = "Initial full model: OLS coefficient estimates")
 ```
 
-The initial full regression model indicates that all individual regression coefficients, except for the coefficient associated with Spring, are statistically significant at the 5% significance level. The corresponding 95% confidence invertals (CIs) exclude zero for all coefficents except Spring. 
+All individual regression coefficients except the one for Spring are statistically significant at the 5% level, and the corresponding 95% confidence intervals exclude zero for all coefficients except Spring.
 
-The pricing and promotional predictors, price, discount, promotion, and competitor pricing are all positively associated with demand. Holding all other predictors constant, a one-unit increase in price, discount, and competitor pricing is associated with an estimated increase in mean demand of 0.326, 0.302, and 0.073 units, respectively. Promoted products have an estimated mean demand 26.055 units higher than non-promoted products.
+The pricing and promotional predictors are all positively associated with demand. Holding all other predictors constant, a one-unit increase in price, discount and competitor pricing is associated with an estimated increase in mean demand of 0.326, 0.302 and 0.073 units, respectively, and promoted products have an estimated mean demand 26.055 units higher than non-promoted products.
 
-There are considerable differences when it comes to product category in demand. Clothing, Electronics, Furniture and Toys have a lower estimated mean demand by 19.691, 60.167, and 2.228 units (respectively) compared to Groceries which has a higher estimated mean demand by 16.089 units -- holding all other predictors constant. These findings are consistent with the differences in demand distribution observed during the initial data analysis. 
+Demand differs considerably across product categories. Relative to Clothing (the reference category), Electronics, Furniture and Toys have lower estimated mean demand by 19.691, 60.167 and 2.228 units, respectively, while Groceries has a higher estimated mean demand by 16.089 units, holding all other predictors constant. These findings are consistent with the differences in demand distributions observed in the initial data analysis.
 
-With external conditions, epidemic conditions are associated with a decrease of 39.211 units in estimated mean demand. Rainy and snowy weather conditions are negatively associated with demand relative to the reference weather condition; sunny weather is positively associated with demand. Regional and seasonal differences are also observed, yet their estimated magnitudes are generally smaller. 
+Among the external conditions, an epidemic is associated with a decrease of 39.211 units in estimated mean demand. Relative to cloudy weather, rainy and snowy weather are negatively associated with demand, while sunny weather is positively associated with demand. Regional and seasonal differences are also present, but their estimated magnitudes are generally smaller.
 
-Price exhibits a positive regression coefficient despite it being a weak negative correlation with demand observed during the initial data analysis. This difference suggests that the association between price and demand changes after accounting for other predictors. Given the strong correlation between price and competitor pricing, potential multicollinearity warrants further investigation in subsequent sections.
+Price has a positive coefficient even though its marginal correlation with demand is weakly negative, which suggests that the association between price and demand changes after accounting for the other predictors. Given the strong correlation between price and competitor pricing, this sign warrants further investigation in subsequent sections.
 
-Although the initial model identifies several statistically significant associations, further model diagnostics are necessary to assess the validity of the underlying regression assumptions and the reliability of these results.
-
-
-
-
-
-
-```{r full-glance}
-glance(fit) |>
-  select(r.squared, adj.r.squared, sigma, statistic, p.value, AIC, BIC) |>
-  kable(booktabs = TRUE, digits = 3, caption = "Initial full model: fit statistics") |>
-  kable_styling(latex_options = "HOLD_position")
-```
-
-The initial full regression model yields an $R^2$ of 0.442, indicating that approximately 44.2% of the variability in demand is explained by the model. The adjusted $R^2$ is also 0.442, and the residual standard error is 35.097 units.
-
-To evaluate the overall significance of the regression model, we conduct an F-test with the following hypotheses:
-
-$$H_0: \beta_1 = \beta_2 = \cdots = \beta_{18} = 0$$
-
-$$H_a: \text{At least one } \beta_j \neq 0$$
-
-The F-statistic is 3339.138 with a p-value less than 0.001. Therefore, we reject $H_0$ and conclude that at least one predictor is significantly associated with demand under the baseline, Gauss-Markov regression assumptions.
-
-Although the overall model is statistically significant, further diagnostics are necessary to assess the underlying regression assumptions and identify potential model inadequacies.
-
-
-
-
-
+The model yields an $R^2$ of `r round(fit_summary$r.squared, 3)`, so approximately `r round(100 * fit_summary$r.squared, 1)`% of the variability in demand is explained, with an adjusted $R^2$ of `r round(fit_summary$adj.r.squared, 3)` and a residual standard error of `r round(fit_summary$sigma, 3)` units. To evaluate the overall significance of the regression, we test
+$$H_0: \beta_1 = \beta_2 = \cdots = \beta_{18} = 0 \quad \text{vs.} \quad H_a: \text{at least one } \beta_j \neq 0.$$
+The F-statistic is `r round(fit_summary$fstatistic[1], 3)` on `r fit_summary$fstatistic[2]` and `r format(fit_summary$fstatistic[3], big.mark = ",")` degrees of freedom, with a p-value less than 0.001. Therefore, we reject $H_0$ and conclude that at least one predictor is significantly associated with demand under the Gauss-Markov regression assumptions. Although the overall model is statistically significant, diagnostics are necessary to assess these assumptions and identify potential model inadequacies.
