@@ -1,3 +1,9 @@
 # Conclusions and Interpretation
 
-TODO
+This study identifies factors associated with daily retail product demand and investigates how these relationships vary across product categories. The final regression results indicate that higher prices relative to competitors are associated with lower demand, while promotions are positively associated with demand across all categories. However, the estimated promotional association is strongest for Groceries and weakest for Furniture, suggesting that promotional strategies should account for category-specific demand patterns.
+
+External conditions also show heterogeneous associations. Epidemics are most negatively associated with demand for Toys, whereas their association with Clothing demand is not statistically significant. Seasonal patterns suggest that retailers may benefit from preparing additional inventory for Groceries in summer and Toys in spring.
+
+Through price-gap reparameterization, square-root transformation, weighted least squares, and model selection, we obtain a parsimonious model with 47 regression parameters and an adjusted $R^2$ of 0.5556 on the transformed response scale. Re-estimation of the WLS weights substantially improves variance homogeneity, although departures from normality remain.
+
+Overall, the final model provides an interpretable framework for category-specific pricing, promotion, and inventory planning. Nevertheless, the estimated relationships are associational rather than causal, and potential dependence among repeated observations and predictive performance on unseen data warrant further investigation.

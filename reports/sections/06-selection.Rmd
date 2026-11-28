@@ -1,7 +1,385 @@
 ## Model Selection
+### Main Effect Selection
+```{r main-effect-selection, echo=FALSE}
+fit_backward = step(fit_wls, direction = "backward", trace = 0)
 
-TODO: backward and forward model selection.
+fit_null = update(fit_wls, . ~ 1)
+
+fit_forward = step(fit_null, scope = list(lower = formula(fit_null), upper = formula(fit_wls)), direction = "forward", trace = 0)
+```
+Both procedures retain all nine main effects (AIC = 296628.5, adjusted $R^2 = 0.5044$).
+
+### Category Interaction Analysis
+
+To investigate whether predictor effects differ across product categories, we expand the additive model to include category interactions. The category-region interaction is excluded because the absence of Toys observations in the West region produces a rank-deficient model.
+
+```{r category-interaction-test, echo=FALSE}
+fit_pooled = fit_wls
+
+fit_interaction = update(fit_pooled,. ~ . + category:(price + price_gap + discount +promotion + epidemic + seasonality + weather_condition))
+
+# Check estimability
+if (anyNA(coef(fit_interaction))) {
+  stop("The fully interacted model is rank deficient.")
+}
+
+# Partial F-test
+interaction_test = anova(fit_pooled, fit_interaction)
+
+f_stat = interaction_test$F[2]
+df_num = interaction_test$Df[2]
+df_den = interaction_test$Res.Df[2]
+p_int = interaction_test$`Pr(>F)`[2]
+```
+
+The partial F-test ($F_{`r df_num`, `r df_den`} = `r round(f_stat, 2)`$, $p < 0.001$) provides strong evidence that predictor effects vary across product categories, treating the estimated WLS weights as fixed.
+
+### Final Model Selection
+
+We perform backward and forward selection using AIC and BIC while retaining all main effects to preserve model hierarchy. BIC imposes a stronger penalty on model complexity and allows us to investigate more simplified models.
+
+```{r final-selection, include=FALSE}
+int_scope = list(
+  lower = formula(fit_pooled),
+  upper = formula(fit_interaction)
+)
+
+# AIC selection
+fit_int_backward = step(
+  fit_interaction,
+  scope = int_scope,
+  direction = "backward",
+  trace = 0
+)
+
+fit_int_forward = step(
+  fit_pooled,
+  scope = int_scope,
+  direction = "forward",
+  trace = 0
+)
+
+# BIC selection
+fit_bic_backward = step(
+  fit_interaction,
+  scope = int_scope,
+  direction = "backward",
+  k = log(nobs(fit_interaction)),
+  trace = 0
+)
+
+fit_bic_forward = step(
+  fit_pooled,
+  scope = int_scope,
+  direction = "forward",
+  k = log(nobs(fit_interaction)),
+  trace = 0
+)
+
+# Candidate model comparison
+models = list(
+  "Additive WLS" = fit_pooled,
+  "Expanded interaction" = fit_interaction,
+  "Backward AIC" = fit_int_backward,
+  "Forward AIC" = fit_int_forward,
+  "Backward BIC" = fit_bic_backward,
+  "Forward BIC" = fit_bic_forward
+)
+
+selection_table = data.frame(
+  Model = names(models),
+  Interactions = sapply(models, function(m)
+    sum(attr(terms(m), "order") > 1)),
+  Parameters = sapply(models, function(m) m$rank),
+  AIC = sapply(models, AIC),
+  BIC = sapply(models, BIC),
+  Adj_R2 = sapply(models, function(m)
+    summary(m)$adj.r.squared)
+)
+
+best_index = which.min(selection_table$BIC)
+
+fit_final = models[[best_index]]
+final_name = names(models)[best_index]
+
+final_terms = attr(terms(fit_final), "term.labels")
+final_interactions = final_terms[grepl(":", final_terms)]
+```
+
+```{r selection-table, echo=FALSE}
+selection_table |>
+  kable(
+    booktabs = TRUE,
+    digits = c(0, 0, 0, 1, 1, 4),
+    row.names = FALSE,
+    col.names = c(
+      "Model", "Interactions", "Parameters",
+      "AIC", "BIC", "Adjusted $R^2$"
+    ),
+    escape = FALSE,
+    caption = "Comparison of candidate WLS models."
+  ) |>
+  kable_styling(latex_options = "HOLD_position")
+```
+
+Both AIC procedures retain all seven interactions. Backward BIC selection removes the category interactions with price gap and weather condition, reducing the number of regression parameters from 63 to 47. This reduces the number of regression parameters by 25.4%, while adjusted $R^2$ decreases only from 0.5577 to 0.5569. The small loss in explanatory power suggests that these additional interactions contribute relatively little to model fit. In contrast, the associations of price, discount, promotion, epidemic, and seasonality with demand warrant category-specific estimation. Thus, we select the backward BIC model, which achieves the lowest BIC while maintaining nearly the same explanatory power as the expanded model.
 
 ## Diagnostics for the Selected Model
+We reassess the diagnostic properties of the selected WLS model. Brown-Forsythe test before reweighting ($F=85.255$, $p<0.001$) indicates that the original WLS weights no longer adequately account for variance differences across category-promotion groups after model selection. We re-estimate the weights while preserving the selected mean structure. The algorithm converges after 21 iterations, reducing residual variance differences across groups.
 
-TODO: repeat the diagnostics (a)-(e) for the selected model.
+The following diagnostics are based on the reweighted model.
+
+```{r reduced-initial-diagnostics, include=FALSE}
+res_before = rstandard(fit_final)
+
+mf_before = model.frame(fit_final)
+
+group_before = interaction(
+  mf_before$category,
+  mf_before$promotion,
+  drop = TRUE
+)
+
+median_before = ave(
+  res_before,
+  group_before,
+  FUN = median
+)
+
+BF_before = anova(
+  lm(abs(res_before - median_before) ~ group_before)
+)
+
+p_BF_before = BF_before$`Pr(>F)`[1]
+```
+
+```{r final-reweighting, include=FALSE}
+fit_before_reweight = fit_final
+fit_reweighted = fit_final
+
+final_formula = formula(fit_final)
+
+w_final = weights(fit_final)
+e_final = residuals(fit_final)
+
+err_final = 0
+tol_final = 1e-10
+niter_final = 0
+maxiter_final = 1000
+
+if (p_BF_before < 0.05) {
+
+  err_final = Inf
+
+  while (err_final > tol_final &&
+         niter_final < maxiter_final) {
+
+    aux_final = lm(
+      log(pmax(e_final^2, .Machine$double.eps)) ~
+        category * promotion,
+      data = dat
+    )
+
+    w_new = exp(-fitted(aux_final))
+
+    err_final = sum(abs(w_final - w_new)) /
+      sum(w_final)
+
+    w_final = w_new
+
+    fit_reweighted = lm(
+      final_formula,
+      data = dat,
+      weights = w_final
+    )
+
+    e_final = residuals(fit_reweighted)
+
+    niter_final = niter_final + 1
+  }
+}
+
+converged_final = err_final <= tol_final
+```
+
+```{r final-diag-setup, include=FALSE}
+n_final = nobs(fit_reweighted)
+p_final = fit_reweighted$rank
+alpha_final = 0.05
+
+res_final = rstandard(fit_reweighted)
+fitted_final = fitted(fit_reweighted)
+
+h_final = hatvalues(fit_reweighted)
+t_final = rstudent(fit_reweighted)
+D_final = cooks.distance(fit_reweighted)
+
+# Constant variance
+q_final = cut(
+  fitted_final,
+  breaks = unique(quantile(fitted_final, 0:5 / 5)),
+  include.lowest = TRUE
+)
+
+sd_fitted_final = tapply(res_final, q_final, sd)
+
+sd_ratio_final = tail(sd_fitted_final, 1) /
+  head(sd_fitted_final, 1)
+
+mf_final = model.frame(fit_reweighted)
+
+group_final = interaction(
+  mf_final$category,
+  mf_final$promotion,
+  drop = TRUE
+)
+
+group_median_final = ave(
+  res_final,
+  group_final,
+  FUN = median
+)
+
+BF_final = anova(
+  lm(abs(res_final - group_median_final) ~ group_final)
+)
+
+p_BF_final = BF_final$`Pr(>F)`[1]
+
+sd_group_final = tapply(
+  res_final,
+  group_final,
+  sd
+)
+
+# Normality
+set.seed(4130)
+
+SW_final = shapiro.test(
+  sample(res_final, min(5000, n_final))
+)
+
+skew_final = mean(
+  ((res_final - mean(res_final)) / sd(res_final))^3
+)
+
+# High leverage
+lev_cut_final = 2 * p_final / n_final
+lev_final = h_final > lev_cut_final
+
+# Outliers
+t_cut_final = qt(
+  alpha_final / (2 * n_final),
+  df = n_final - p_final - 1,
+  lower.tail = FALSE
+)
+
+out_final = abs(t_final) > t_cut_final
+
+# Influence
+inf_final = D_final > 0.5
+
+# Rank deficiency
+rank_deficient_final = anyNA(coef(fit_reweighted))
+
+# Diagnostic interpretations
+variance_text = if (p_BF_final >= 0.05) {
+  "provides no significant evidence of unequal variance across category-promotion groups"
+} else {
+  "indicates that variance differences across category-promotion groups remain"
+}
+
+normality_text = if (SW_final$p.value < 0.05) {
+  "rejects normality"
+} else {
+  "does not reject normality"
+}
+
+skew_text = if (skew_final < 0) {
+  "negative"
+} else {
+  "positive"
+}
+
+influence_text = if (sum(inf_final) == 0) {
+  "No observation is identified as highly influential under this criterion."
+} else {
+  "The flagged observations warrant further investigation."
+}
+
+reweight_text = if (niter_final == 0) {
+  "The original WLS weights are retained."
+} else if (converged_final) {
+  paste0(
+    "Re-estimation converges after ",
+    niter_final,
+    " iterations."
+  )
+} else {
+  "Weight re-estimation reaches the iteration limit without convergence."
+}
+```
+
+```{r final-diag-plots, echo=FALSE, fig.cap="Diagnostic plots for the selected reduced WLS model.", fig.width=7, fig.height=4.8, out.width="75%"}
+old_par = par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# Residuals vs fitted
+plot(
+  fitted_final, res_final,
+  pch = 16, cex = 0.25,
+  col = adjustcolor("black", alpha.f = 0.15),
+  xlab = "Fitted values",
+  ylab = "Standardized residuals",
+  main = "Residuals vs Fitted"
+)
+
+abline(h = 0, lty = 2)
+lines(lowess(fitted_final, res_final), col = "red", lwd = 2)
+
+# Normal Q-Q
+qqnorm(
+  res_final,
+  pch = 16, cex = 0.25,
+  main = "Normal Q-Q"
+)
+
+qqline(res_final, col = "red", lwd = 2)
+
+# Scale-location
+plot(
+  fitted_final, sqrt(abs(res_final)),
+  pch = 16, cex = 0.25,
+  col = adjustcolor("black", alpha.f = 0.15),
+  xlab = "Fitted values",
+  ylab = expression(sqrt("|Standardized residuals|")),
+  main = "Scale-Location"
+)
+
+lines(
+  lowess(fitted_final, sqrt(abs(res_final))),
+  col = "red", lwd = 2
+)
+
+# Residuals vs leverage
+plot(fit_reweighted, which = 5, id.n = 0)
+abline(v = lev_cut_final, col = "red", lty = 2)
+
+par(old_par)
+```
+
+- **Constant variance.** Group residual standard deviations range from 0.975 to 1.030, and the residual SD ratio between the highest and lowest fitted-value quintiles is 1.035. These results suggest that reweighting substantially improves variance homogeneity.
+
+- **Normality.** Although the Shapiro-Wilk statistic is close to 1 ($W=0.9928$), the test rejects normality ($p<0.001$). Residual skewness of $-0.412$ indicates a longer left tail, suggesting that unusually low demand is less adequately captured by the model. Normality inference should therefore be interpreted with caution.
+
+- **High leverage.** Using the cutoff $2p/n$, 1,724 observations (2.27%) shows high leverage. These observations represent unusual combinations of predictors in the weighted design and have greater potential to affect coefficient estimates. However, high leverage alone does not justify their removal.
+
+- **Outliers.** The Bonferroni-adjusted test identifies 18 potential outliers (0.024%). These observations represent demand levels that are poorly explained by the fitted model. Their small proportion suggests that extreme prediction errors are relatively uncommon.
+
+- **Influence.** The maximum Cook's distance is 0.000620, far below the adopted threshold of 0.5. Despite the presence of high-leverage observations and outliers, no individual observation appears to substantially influence the overall fitted model.
+
+```{r final-rank-check, include=FALSE}
+rank_deficient_final = anyNA(coef(fit_reweighted))
+```
+
+**Model adequacy.** The reduced WLS model substantially improves variance homogeneity while maintaining explanatory power with fewer parameters. Although residual normality remains imperfect, no substantial individual influence is detected. The reduced interaction structure provides a more simplified framework for investigating category-specific demand relationships, even though it remains diagnostic limitations.
+

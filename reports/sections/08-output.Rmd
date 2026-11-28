@@ -70,3 +70,73 @@ F_wls         # Brown-Forsythe across category x promotion, WLS standardized res
 summary(fit_wls)
 round(cbind(OLS = b_ols[, 1], WLS = b_wls[, 1], SE_ratio = se_ratio), 3)
 ```
+
+## Model Selection (Section 2.5) {-}
+
+Main effect selection:
+
+```{r out-main-selection, echo = TRUE}
+formula(fit_backward)
+formula(fit_forward)
+AIC(fit_wls, fit_backward, fit_forward)
+```
+
+Category interaction analysis:
+
+```{r out-interaction, echo = TRUE}
+table(dat$category, dat$region)
+interaction_test
+```
+
+AIC and BIC selection:
+
+```{r out-selection, echo = TRUE}
+selection_table
+formula(fit_bic_backward)
+formula(fit_bic_forward)
+final_name
+final_interactions
+```
+
+## Diagnostics for Selected Model (Section 2.6) {-}
+
+Re-estimation of WLS weights:
+
+```{r out-reweighting, echo = TRUE}
+niter_final       # IRLS iterations until convergence
+converged_final
+BF_before         # Brown-Forsythe before reweighting
+BF_final          # Brown-Forsythe after reweighting
+```
+
+Constant variance and normality:
+
+```{r out-final-tests, echo = TRUE}
+sd_fitted_final   # residual SD by fifth of fitted values
+sd_ratio_final    # residual SD ratio: highest to lowest fifth
+sd_group_final    # residual SD by category x promotion
+SW_final          # Shapiro-Wilk on 5,000 sampled residuals
+skew_final
+```
+
+High leverage, outliers and influence:
+
+```{r out-final-unusual, echo = TRUE}
+round(c(leverage_cutoff = lev_cut_final,
+        max_leverage = max(h_final)), 6)
+sum(lev_final)    # number of high-leverage observations
+summary(dat[lev_final, c("price", "price_gap", "category")])
+c(bonferroni_cutoff = t_cut_final,
+  max_abs_rstudent = max(abs(t_final)))
+sum(out_final)    # number of outliers
+table(sign(t_final[out_final]))
+dat[out_final, c("demand", "promotion", "category", "epidemic")]
+max(D_final)     # largest Cook's distance
+sum(inf_final)   # number of influential observations
+```
+
+Final reduced WLS model:
+
+```{r out-final-model, echo = TRUE}
+summary(fit_reweighted)
+```
